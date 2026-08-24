@@ -119,7 +119,7 @@ Open the CRM at:
 http://localhost:8002/static/crm/
 ```
 
-The CRM UI calls its own origin for customer and activity APIs. It calls the main application only for login, registration, and `/api/auth/me`. If authentication is hosted elsewhere, set `authApiUrl` in browser local storage to that server's `/api` URL.
+The CRM UI calls its own origin for authentication, customer, and activity APIs. CRM owns its users table and signs its own JWTs with `CRM_SECRET_KEY`; no login, registration, or token validation request goes to port `8000`.
 
 ### CRM API
 
@@ -145,17 +145,17 @@ The CRM database defaults to `services/crm_service/crm.db`. Set `CRM_DATABASE_UR
 - It has its own FastAPI process and port (`8002`).
 - It owns its own SQLAlchemy models, tables, and database file.
 - It serves its own frontend at `/static/crm/`.
-- It does not call inventory, notification, or orchestrator services.
+- It owns registration, login, `/api/auth/me`, password hashing, and JWT validation.
+- It does not call inventory, notification, orchestrator, or the main app.
 - The orchestrator calls CRM through `/api/crm/process`, which is the intended downstream-service relationship.
 - CRM can be stopped while the main workflow platform remains running.
 
-**No, not fully autonomous today:**
+**Deployment caveats:**
 
-- CRM login, registration, and token validation are provided by the main `app` at port `8000`.
-- CRM customer routes currently accept the forwarded JWT but do not independently validate it.
-- Docker Compose starts CRM as a separate container, but the CRM image is built from the repository root and shares the repository's Python requirements.
+- Docker Compose builds the CRM image from the repository root and shares the repository's Python requirements, although the process and database remain separate.
+- The orchestrator can call the intentionally separate `/api/crm/process` workflow callback; this is an inbound integration, not a CRM dependency on the orchestrator.
 
-Therefore, CRM is independently deployable and database-isolated, but authentication is still a shared platform dependency. To make it fully autonomous, move or duplicate the auth/token verification contract into `services/crm_service`, or place authentication behind a shared identity service that CRM can validate independently.
+CRM is therefore independently deployable, database-isolated, and authentication-independent. The service requires a strong unique `CRM_SECRET_KEY` and can use a persistent `CRM_DATABASE_URL`; local development loads both settings from `services/crm_service/.env`, which is ignored by Git.
 
 ### Failure Demonstration
 

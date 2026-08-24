@@ -1,20 +1,27 @@
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, status as http_status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from pydantic import BaseModel, EmailStr
 from typing import Dict, Any, List, Optional
 import logging
 from sqlalchemy import create_engine, Column, Integer, String, JSON, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 import os
+from dotenv import load_dotenv
+
+PACKAGE_DIR = Path(__file__).parent
+load_dotenv(PACKAGE_DIR / ".env")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("crm-service")
 
 # Database setup
-DATABASE_URL = os.getenv("CRM_DATABASE_URL", f"sqlite:///{Path(__file__).parent / 'crm.db'}")
+DATABASE_URL = os.getenv("CRM_DATABASE_URL", f"sqlite:///{PACKAGE_DIR / 'crm.db'}")
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -34,6 +41,12 @@ class CustomerEvent(Base):
     event_type = Column(String)
     data = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+class CRMUser(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
 
 Base.metadata.create_all(bind=engine)
 
@@ -56,6 +69,14 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="crm-static")
 
+CRM_SECRET_KEY = os.getenv("CRM_SECRET_KEY")
+if not CRM_SECRET_KEY:
+    raise RuntimeError("CRM_SECRET_KEY must be configured for the CRM service")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("CRM_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+ALGORITHM = "HS256"
+password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
 # Failure simulation state
 failure_simulation = {"is_failed": False, "failure_code": 500, "failure_message": "CRM Service simulated failure"}
 
@@ -71,6 +92,46 @@ class EventCreate(BaseModel):
     customer_id: str
     event_type: str
     data: Dict[str, Any]
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+class UserOut(BaseModel):
+    id: int
+    email: EmailStr
+
+    class Config:
+        from_attributes = True
+
+def create_access_token(email: str) -> str:
+    from datetime import timedelta, timezone
+    expires = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    return jwt.encode({"sub": email, "exp": expires}, CRM_SECRET_KEY, algorithm=ALGORITHM)
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_error = HTTPException(
+        status_code=http_status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, CRM_SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+    except JWTError:
+        raise credentials_error
+    user = db.query(CRMUser).filter(CRMUser.email == email).first()
+    if user is None:
+        raise credentials_error
+    return user
 
 def ensure_available():
     if failure_simulation["is_failed"]:
@@ -99,8 +160,31 @@ def health():
         "simulated_failure": failure_simulation["is_failed"]
     }
 
+@app.post("/api/auth/register", response_model=UserOut, status_code=http_status.HTTP_201_CREATED)
+def register(payload: UserCreate, db: Session = Depends(get_db)):
+    if len(payload.password) < 6:
+        raise HTTPException(status_code=422, detail="Password must be at least 6 characters")
+    if db.query(CRMUser).filter(CRMUser.email == payload.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    user = CRMUser(email=payload.email, hashed_password=password_context.hash(payload.password))
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+@app.post("/api/auth/login", response_model=Token)
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(CRMUser).filter(CRMUser.email == payload.email).first()
+    if not user or not password_context.verify(payload.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    return Token(access_token=create_access_token(user.email))
+
+@app.get("/api/auth/me", response_model=UserOut)
+def read_current_user(current_user: CRMUser = Depends(get_current_user)):
+    return current_user
+
 @app.post("/customers")
-def create_customer(cust: CustomerCreate, db: Session = Depends(get_db)):
+def create_customer(cust: CustomerCreate, db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
     db_cust = db.query(Customer).filter(Customer.email == cust.email).first()
     if db_cust:
@@ -112,7 +196,7 @@ def create_customer(cust: CustomerCreate, db: Session = Depends(get_db)):
     return customer_payload(db_cust)
 
 @app.get("/customers")
-def list_customers(search: Optional[str] = Query(default=None), db: Session = Depends(get_db)):
+def list_customers(search: Optional[str] = Query(default=None), db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
     query = db.query(Customer)
     if search:
@@ -121,7 +205,7 @@ def list_customers(search: Optional[str] = Query(default=None), db: Session = De
     return [customer_payload(customer) for customer in query.order_by(Customer.created_at.desc()).all()]
 
 @app.put("/customers/{customer_id}")
-def update_customer(customer_id: int, cust: CustomerUpdate, db: Session = Depends(get_db)):
+def update_customer(customer_id: int, cust: CustomerUpdate, db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
     db_cust = db.query(Customer).filter(Customer.id == customer_id).first()
     if not db_cust:
@@ -138,7 +222,7 @@ def update_customer(customer_id: int, cust: CustomerUpdate, db: Session = Depend
     return customer_payload(db_cust)
 
 @app.delete("/customers/{customer_id}", status_code=204)
-def delete_customer(customer_id: int, db: Session = Depends(get_db)):
+def delete_customer(customer_id: int, db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
     db_cust = db.query(Customer).filter(Customer.id == customer_id).first()
     if not db_cust:
@@ -148,7 +232,7 @@ def delete_customer(customer_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 @app.get("/customers/{customer_id}")
-def get_customer(customer_id: str, db: Session = Depends(get_db)):
+def get_customer(customer_id: str, db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
     db_cust = db.query(Customer).filter(Customer.id == int(customer_id)).first()
     if not db_cust:
@@ -156,7 +240,7 @@ def get_customer(customer_id: str, db: Session = Depends(get_db)):
     return customer_payload(db_cust)
 
 @app.get("/customers/{customer_id}/events")
-def list_events(customer_id: int, db: Session = Depends(get_db)):
+def list_events(customer_id: int, db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
@@ -165,13 +249,13 @@ def list_events(customer_id: int, db: Session = Depends(get_db)):
     return [{"id": event.id, "customer_id": event.customer_id, "event_type": event.event_type, "data": event.data, "created_at": event.created_at} for event in events]
 
 @app.get("/events")
-def list_all_events(db: Session = Depends(get_db)):
+def list_all_events(db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
     events = db.query(CustomerEvent).order_by(CustomerEvent.created_at.desc()).all()
     return [{"id": event.id, "customer_id": event.customer_id, "event_type": event.event_type, "data": event.data, "created_at": event.created_at} for event in events]
 
 @app.post("/customers/{customer_id}/events")
-def create_event(customer_id: str, event: EventCreate, db: Session = Depends(get_db)):
+def create_event(customer_id: str, event: EventCreate, db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
     customer = db.query(Customer).filter(Customer.id == int(customer_id)).first()
     if not customer:

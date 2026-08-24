@@ -1,4 +1,4 @@
-const AUTH_API = localStorage.getItem('authApiUrl') || 'http://localhost:8000/api';
+const AUTH_API = localStorage.getItem('authApiUrl') || window.location.origin + '/api';
 const CRM_API = localStorage.getItem('crmApiUrl') || window.location.origin;
 const state = { customers: [], events: [], editingId: null, register: false };
 const $ = id => document.getElementById(id);

@@ -30,6 +30,8 @@ services:
       context: .
       dockerfile: Dockerfile
     command: uvicorn services.crm_service.main:app --host 0.0.0.0 --port 8002
+    env_file:
+      - ./services/crm_service/.env
     ports:
       - "8002:8002"
 
