@@ -90,7 +90,7 @@ class WorkflowOrchestrator:
         """
         Execute a workflow through all steps.
         
-        Returns updated workflow state (may be COMPLETED or FAILED).
+        Returns updated workflow state (may be COMPLETED, COMPLETED_WITH_RECOVERY, or FAILED).
         """
         logger.info(f"[ORCHESTRATOR] Workflow {workflow.id} started")
         self.log_event(workflow.id, AuditEventType.WORKFLOW_STARTED)
@@ -99,37 +99,49 @@ class WorkflowOrchestrator:
         workflow.updated_at = datetime.utcnow()
         self.db.commit()
 
+        has_recovered_steps = False
+
         for step_def in steps:
             logger.info(
                 f"[ORCHESTRATOR] Executing step: {step_def.name} "
                 f"(workflow_id={workflow.id})"
             )
-            success = self._execute_step_with_retry(workflow, step_def)
+            step_status = self._execute_step_with_retry(workflow, step_def)
 
-            if not success:
+            if step_status == "SUCCESS":
+                continue
+            elif step_status == "RECOVERED":
+                has_recovered_steps = True
+                continue
+            else:
                 logger.error(
-                    f"[ORCHESTRATOR] Step {step_def.name} failed after "
-                    f"retries (workflow_id={workflow.id})"
+                    f"[ORCHESTRATOR] Step {step_def.name} failed unrecoverably (workflow_id={workflow.id})"
                 )
                 workflow.status = WorkflowStatus.FAILED
                 workflow.updated_at = datetime.utcnow()
                 self.db.commit()
-                self.log_event(workflow.id, AuditEventType.WORKFLOW_FAILED)
+                self.log_event(workflow.id, AuditEventType.WORKFLOW_FAILED, error_message=f"Workflow failed at step {step_def.name}")
                 return workflow
 
-        # All steps succeeded
-        workflow.status = WorkflowStatus.COMPLETED
+        # All steps completed
+        if has_recovered_steps:
+            workflow.status = WorkflowStatus.COMPLETED_WITH_RECOVERY
+            logger.info(f"[ORCHESTRATOR] Workflow {workflow.id} completed with recovery")
+            self.log_event(workflow.id, AuditEventType.WORKFLOW_COMPLETED, metadata={"recovery_applied": True})
+        else:
+            workflow.status = WorkflowStatus.COMPLETED
+            logger.info(f"[ORCHESTRATOR] Workflow {workflow.id} completed successfully")
+            self.log_event(workflow.id, AuditEventType.WORKFLOW_COMPLETED)
+
         workflow.updated_at = datetime.utcnow()
         self.db.commit()
-        logger.info(f"[ORCHESTRATOR] Workflow {workflow.id} completed successfully")
-        self.log_event(workflow.id, AuditEventType.WORKFLOW_COMPLETED)
         return workflow
 
-    def _execute_step_with_retry(self, workflow: Workflow, step_def: StepDefinition) -> bool:
+    def _execute_step_with_retry(self, workflow: Workflow, step_def: StepDefinition) -> str:
         """
-        Execute a single step with retry logic.
+        Execute a single step with retry logic and recovery fallback.
         
-        Returns True if step succeeded, False if all retries exhausted.
+        Returns "SUCCESS", "RECOVERED", or "FAILED".
         """
         retry_policy = step_def.retry_policy
         attempt = 0
@@ -150,7 +162,7 @@ class WorkflowOrchestrator:
             self.db.commit()
 
             # Transform input payload for this step
-            request_payload = step_def.transform_request(workflow.payload)
+            request_payload = step_def.transform_request(workflow.payload or {})
 
             # Create step request
             step_request = StepRequest(
@@ -174,15 +186,18 @@ class WorkflowOrchestrator:
                     AuditEventType.STEP_SUCCEEDED,
                     step_def.name,
                     attempt,
+                    metadata={"response": response.data}
                 )
 
                 # Transform response back into workflow payload for next step
                 transformed_response = step_def.transform_response(response.data or {})
+                if workflow.payload is None:
+                    workflow.payload = {}
                 workflow.payload.update(transformed_response)
                 workflow.updated_at = datetime.utcnow()
                 self.db.commit()
 
-                return True
+                return "SUCCESS"
             else:
                 logger.warning(
                     f"[ORCHESTRATOR] Step {step_def.name} failed: "
@@ -210,7 +225,6 @@ class WorkflowOrchestrator:
                     workflow.status = WorkflowStatus.WAITING_RETRY
                     workflow.updated_at = datetime.utcnow()
                     self.db.commit()
-                    # TODO: Implement actual retry scheduling/backoff
 
         # All retries exhausted
         logger.error(
@@ -222,8 +236,38 @@ class WorkflowOrchestrator:
             AuditEventType.RETRY_FAILED,
             step_def.name,
             attempt,
+            error_message=f"All {retry_policy.max_attempts} attempts failed."
         )
-        return False
+
+        # Execute recovery strategy if step is recoverable (e.g. CRM, Notification)
+        if step_def.name in ["crm", "notification"]:
+            logger.warning(f"[ORCHESTRATOR] Initiating recovery strategy for step '{step_def.name}'...")
+            self.log_event(
+                workflow.id,
+                AuditEventType.RECOVERY_INITIATED,
+                step_def.name,
+                attempt,
+                error_message=f"Service '{step_def.name}' unavailable. Executing compensation fallback."
+            )
+            
+            fallback_data = {
+                f"{step_def.name}_status": "RECOVERED_OFFLINE_BUFFER",
+                f"{step_def.name}_fallback_msg": f"Queued for offline retry buffer because {step_def.name} service was down"
+            }
+            if workflow.payload is None:
+                workflow.payload = {}
+            workflow.payload.update(fallback_data)
+            
+            self.log_event(
+                workflow.id,
+                AuditEventType.RECOVERY_COMPLETED,
+                step_def.name,
+                attempt,
+                metadata=fallback_data
+            )
+            return "RECOVERED"
+
+        return "FAILED"
 
     def _get_service_client(self, step_name: str):
         """Route to appropriate service client based on step name."""

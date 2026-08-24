@@ -1,27 +1,21 @@
-"""Service clients for Inventory, CRM, and Notification services."""
-
+import os
 from app.workflows.clients.base import ServiceClient
 
 
 class InventoryClient(ServiceClient):
     """HTTP client for Inventory service."""
     service_name = "inventory"
-    # Local development: all services run on same app (localhost:8000)
-    # Production: set via environment variable or config
-    service_url = "http://localhost:8000"
+    service_url = os.getenv("INVENTORY_SERVICE_URL", "http://localhost:8001")
 
 
 class CRMClient(ServiceClient):
     """HTTP client for CRM service."""
     service_name = "crm"
-    # Local development: all services run on same app (localhost:8000)
-    # Production: set via environment variable or config
-    service_url = "http://localhost:8000"
+    service_url = os.getenv("CRM_SERVICE_URL", "http://localhost:8002")
 
 
 class NotificationClient(ServiceClient):
     """HTTP client for Notification service."""
     service_name = "notification"
-    # Local development: all services run on same app (localhost:8000)
-    # Production: set via environment variable or config
-    service_url = "http://localhost:8000"
+    service_url = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8003")
+

@@ -65,11 +65,17 @@ class OrderService:
             f"for order {order_id}"
         )
 
+        import os
+
         # Define the workflow pipeline
+        inventory_url = os.getenv("INVENTORY_SERVICE_URL", "http://localhost:8001") + "/api/inventory/process"
+        crm_url = os.getenv("CRM_SERVICE_URL", "http://localhost:8002") + "/api/crm/process"
+        notification_url = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8003") + "/api/notification/process"
+
         steps = [
             StepDefinition(
                 name="inventory",
-                service_endpoint="http://localhost:8000/api/inventory/process",
+                service_endpoint=inventory_url,
                 retry_policy=RetryPolicy(max_attempts=2),
                 transform_request=lambda p: {
                     "sku": p.get("sku"),
@@ -79,14 +85,14 @@ class OrderService:
             ),
             StepDefinition(
                 name="crm",
-                service_endpoint="http://localhost:8000/api/crm/process",
+                service_endpoint=crm_url,
                 retry_policy=RetryPolicy(max_attempts=2),
                 transform_request=lambda p: {"customer_email": p.get("customer_email")},
                 transform_response=lambda r: r,
             ),
             StepDefinition(
                 name="notification",
-                service_endpoint="http://localhost:8000/api/notification/process",
+                service_endpoint=notification_url,
                 retry_policy=RetryPolicy(max_attempts=2),
                 transform_request=lambda p: {
                     "recipient_email": p.get("customer_email"),

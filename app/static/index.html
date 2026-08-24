@@ -3,69 +3,179 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Workflow Orchestration Demo</title>
+    <title>Fault-Tolerant Workflow Orchestrator</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Workflow Orchestration Demo</h1>
-            <p>Create orders and observe the workflow execution pipeline</p>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="navbar">
+            <div class="logo">
+                <span class="icon">⚡</span>
+                <div>
+                    <h1>Workflow Orchestrator</h1>
+                    <p class="subtitle">Fault-Tolerant Multi-System Architecture</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button id="refreshBtn" class="btn btn-secondary">🔄 Refresh Status</button>
+            </div>
         </header>
 
-        <main>
-            <!-- Order Creation Section -->
-            <section class="section">
-                <h2>Create Order</h2>
+        <main class="content-grid">
+            <!-- Downstream Services Control Panel -->
+            <section class="card full-width">
+                <div class="card-header">
+                    <h2>Independent Downstream Services</h2>
+                    <span class="badge badge-info">Zero Inter-Service Coupling</span>
+                </div>
+                <div class="services-grid" id="servicesGrid">
+                    <!-- Service 1: Inventory -->
+                    <div class="service-card" id="card-inventory">
+                        <div class="service-header">
+                            <div class="service-title">
+                                <h3>Inventory Service</h3>
+                                <span class="port-tag">Port 8001</span>
+                            </div>
+                            <span class="status-indicator online" id="status-inventory">● UP</span>
+                        </div>
+                        <p class="service-desc">Manages product stock & reservations independently.</p>
+                        <div class="service-controls">
+                            <button class="btn btn-danger btn-sm" onclick="simulateFailure('inventory')">💥 Fail Service</button>
+                            <button class="btn btn-success btn-sm" onclick="recoverService('inventory')">✅ Recover Service</button>
+                        </div>
+                    </div>
+
+                    <!-- Service 2: CRM -->
+                    <div class="service-card" id="card-crm">
+                        <div class="service-header">
+                            <div class="service-title">
+                                <h3>CRM Service</h3>
+                                <span class="port-tag">Port 8002</span>
+                            </div>
+                            <span class="status-indicator online" id="status-crm">● UP</span>
+                        </div>
+                        <p class="service-desc">Tracks customer history & order events independently.</p>
+                        <div class="service-controls">
+                            <button class="btn btn-danger btn-sm" onclick="simulateFailure('crm')">💥 Fail Service</button>
+                            <button class="btn btn-success btn-sm" onclick="recoverService('crm')">✅ Recover Service</button>
+                        </div>
+                    </div>
+
+                    <!-- Service 3: Notification -->
+                    <div class="service-card" id="card-notification">
+                        <div class="service-header">
+                            <div class="service-title">
+                                <h3>Notification Service</h3>
+                                <span class="port-tag">Port 8003</span>
+                            </div>
+                            <span class="status-indicator online" id="status-notification">● UP</span>
+                        </div>
+                        <p class="service-desc">Handles customer emails/SMS notifications independently.</p>
+                        <div class="service-controls">
+                            <button class="btn btn-danger btn-sm" onclick="simulateFailure('notification')">💥 Fail Service</button>
+                            <button class="btn btn-success btn-sm" onclick="recoverService('notification')">✅ Recover Service</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Order Trigger Section -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>Trigger New Workflow</h2>
+                </div>
                 <form id="orderForm" class="form">
                     <div class="form-group">
-                        <label for="customerEmail">Customer Email:</label>
-                        <input type="email" id="customerEmail" name="customerEmail" required>
+                        <label for="customerEmail">Customer Email</label>
+                        <input type="email" id="customerEmail" name="customerEmail" value="alex@example.com" required>
                     </div>
-                    <div class="form-group">
-                        <label for="sku">SKU:</label>
-                        <input type="text" id="sku" name="sku" value="ITEM-001" required>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="sku">SKU / Item</label>
+                            <input type="text" id="sku" name="sku" value="ITEM-001" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="quantity">Quantity</label>
+                            <input type="number" id="quantity" name="quantity" value="1" min="1" required>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="quantity">Quantity:</label>
-                        <input type="number" id="quantity" name="quantity" value="1" min="1" required>
-                    </div>
-                    <button type="submit" class="btn">Create Order & Execute Workflow</button>
+                    <button type="submit" class="btn btn-primary btn-block" id="submitBtn">
+                        🚀 Start Workflow Execution
+                    </button>
                 </form>
             </section>
 
-            <!-- Workflow Status Section -->
-            <section class="section">
-                <h2>Workflow Status</h2>
-                <div id="statusPanel" class="status-panel">
-                    <p class="placeholder">Create an order to see workflow status</p>
+            <!-- Active Workflow Pipeline Visualization -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>Live Workflow Pipeline</h2>
+                    <span class="badge" id="workflowStatusBadge">IDLE</span>
                 </div>
-            </section>
-
-            <!-- Execution Log Section -->
-            <section class="section">
-                <h2>Execution Log</h2>
-                <div id="logPanel" class="log-panel">
-                    <p class="placeholder">Logs will appear here</p>
-                </div>
-            </section>
-
-            <!-- Query Existing Workflow Section -->
-            <section class="section">
-                <h2>Query Workflow</h2>
-                <form id="queryForm" class="form">
-                    <div class="form-group">
-                        <label for="orderId">Order ID:</label>
-                        <input type="text" id="orderId" name="orderId" placeholder="ORD-12345678" required>
+                <div class="pipeline-container">
+                    <div class="pipeline-flow">
+                        <div class="pipeline-step" id="step-order">
+                            <div class="step-icon">📦</div>
+                            <div class="step-label">Order Received</div>
+                            <div class="step-status">COMPLETED</div>
+                        </div>
+                        <div class="pipeline-arrow">➔</div>
+                        <div class="pipeline-step" id="step-inventory">
+                            <div class="step-icon">🏬</div>
+                            <div class="step-label">Inventory</div>
+                            <div class="step-status">PENDING</div>
+                        </div>
+                        <div class="pipeline-arrow">➔</div>
+                        <div class="pipeline-step" id="step-crm">
+                            <div class="step-icon">👤</div>
+                            <div class="step-label">CRM Event</div>
+                            <div class="step-status">PENDING</div>
+                        </div>
+                        <div class="pipeline-arrow">➔</div>
+                        <div class="pipeline-step" id="step-notification">
+                            <div class="step-icon">📧</div>
+                            <div class="step-label">Notification</div>
+                            <div class="step-status">PENDING</div>
+                        </div>
                     </div>
-                    <button type="submit" class="btn">Get Status</button>
-                </form>
+                    <div id="workflowResultMsg" class="result-message">
+                        Submit an order above to execute the orchestrated workflow pipeline.
+                    </div>
+                </div>
+            </section>
+
+            <!-- Audit Trail Section -->
+            <section class="card full-width">
+                <div class="card-header">
+                    <h2>Workflow Audit Log Timeline</h2>
+                    <div class="audit-search">
+                        <input type="text" id="queryOrderId" placeholder="Order ID (e.g. ORD-ABC12345)">
+                        <button class="btn btn-secondary btn-sm" onclick="queryOrderHistory()">Inspect Order</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="audit-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Step / Service</th>
+                                <th>Event Type</th>
+                                <th>Attempt</th>
+                                <th>Details / Error Message</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditTableBody">
+                            <tr>
+                                <td colspan="5" class="empty-row">No workflow executed yet. Click "Start Workflow Execution" above.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </section>
         </main>
-
-        <footer>
-            <p>Backend: FastAPI | Orchestration: Multi-service workflow with retry &amp; audit logging</p>
-        </footer>
     </div>
 
     <script src="/static/app.js"></script>

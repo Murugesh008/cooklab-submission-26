@@ -15,7 +15,7 @@ from app.services.crm.models import CRMRecord
 from app.services.notification.models import Notification
 
 # Import routers
-from app.routers import auth, health
+from app.routers import auth, health, admin
 from app.order.routers import router as order_router
 from app.services.inventory.routers import router as inventory_router
 from app.services.crm.routers import router as crm_router
@@ -55,6 +55,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # Include existing routers
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(admin.router)
 
 # Include workflow and service routers
 app.include_router(order_router)

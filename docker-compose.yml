@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn orchestrator.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - INVENTORY_SERVICE_URL=http://inventory-service:8001
+      - CRM_SERVICE_URL=http://crm-service:8002
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8003
+    depends_on:
+      - inventory-service
+      - crm-service
+      - notification-service
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn services.inventory_service.main:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+
+  crm-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn services.crm_service.main:app --host 0.0.0.0 --port 8002
+    ports:
+      - "8002:8002"
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn services.notification_service.main:app --host 0.0.0.0 --port 8003
+    ports:
+      - "8003:8003"
