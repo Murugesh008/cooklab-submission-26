@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import logging
 
@@ -68,8 +68,15 @@ app.include_router(notification_router)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def root():
+    return RedirectResponse(url="/static/index.html")
+
+
+@app.get("/api", include_in_schema=False)
+def api_info():
+    # The old root JSON summary, kept reachable at /api for anyone who
+    # wants the endpoint list without loading the dashboard.
     return {
         "message": "Workflow Orchestration API",
         "endpoints": {
