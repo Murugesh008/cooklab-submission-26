@@ -147,6 +147,21 @@
                 </div>
             </section>
 
+            <section class="card full-width" id="diagnosisCard" hidden>
+                <div class="card-header">
+                    <h2>AI Incident Diagnosis</h2>
+                    <span class="badge badge-danger">Maintenance Review</span>
+                </div>
+                <div class="diagnosis-grid">
+                    <div><span class="diagnosis-label">Failed step</span><strong id="diagnosisStep">-</strong></div>
+                    <div><span class="diagnosis-label">Failure type</span><strong id="diagnosisType">-</strong></div>
+                    <div><span class="diagnosis-label">Confidence</span><strong id="diagnosisConfidence">-</strong></div>
+                </div>
+                <p class="diagnosis-label">Likely root cause</p><p id="diagnosisRootCause"></p>
+                <p class="diagnosis-label">Recommended actions</p><ul id="diagnosisActions"></ul>
+                <p class="diagnosis-label">Maintenance message</p><p id="diagnosisMessage"></p>
+            </section>
+
             <!-- Audit Trail Section -->
             <section class="card full-width">
                 <div class="card-header">

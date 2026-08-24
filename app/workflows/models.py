@@ -49,6 +49,7 @@ class Workflow(Base):
     attempt_count = Column(Integer, default=0)
     # Payload of the workflow (the order data, etc.)
     payload = Column(JSON, nullable=True)
+    diagnosis = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

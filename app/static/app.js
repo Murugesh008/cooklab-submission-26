@@ -118,6 +118,7 @@ async function loadOrderHistory(orderId) {
             return;
         }
         const data = await response.json();
+        renderDiagnosis(data.diagnosis);
 
         // Update overall badge
         const badge = document.getElementById('workflowStatusBadge');
@@ -211,6 +212,22 @@ async function loadOrderHistory(orderId) {
     } catch (err) {
         console.error('Error loading history:', err);
     }
+}
+
+function renderDiagnosis(diagnosis) {
+    const card = document.getElementById('diagnosisCard');
+    if (!card) return;
+    if (!diagnosis) {
+        card.hidden = true;
+        return;
+    }
+    card.hidden = false;
+    document.getElementById('diagnosisStep').textContent = diagnosis.failed_step;
+    document.getElementById('diagnosisType').textContent = diagnosis.failure_type;
+    document.getElementById('diagnosisConfidence').textContent = `${Math.round(diagnosis.confidence * 100)}%`;
+    document.getElementById('diagnosisRootCause').textContent = diagnosis.root_cause;
+    document.getElementById('diagnosisActions').innerHTML = diagnosis.recommended_actions.map(action => `<li>${action}</li>`).join('');
+    document.getElementById('diagnosisMessage').textContent = diagnosis.maintenance_message;
 }
 
 function updatePipelineStep(stepId, stateClass, statusText) {

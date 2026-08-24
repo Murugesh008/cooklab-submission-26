@@ -9,6 +9,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from app.order.models import Order
 from app.workflows.orchestrator import WorkflowOrchestrator
+from app.workflows.models import Workflow
 from app.workflows.step import RetryPolicy, StepDefinition
 
 logger = logging.getLogger(__name__)
@@ -163,9 +164,11 @@ class OrderService:
                     "step": event.step,
                     "attempt": event.attempt,
                     "error_message": event.error_message,
+                    "event_data": event.event_data or {},
                 }
                 for event in history
             ],
+            "diagnosis": self.db.query(Workflow).filter(Workflow.id == order.workflow_id).first().diagnosis,
         }
 
 

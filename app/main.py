@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 import logging
 
 from app.db.database import Base, engine
+from sqlalchemy import inspect, text
 
 # Import all models so they're created in the database
 from app.models.user import User
@@ -29,6 +30,9 @@ logging.basicConfig(
 # startup. No Alembic migrations - fine because there's no real prod data
 # to preserve across schema changes during a 16-hour build.
 Base.metadata.create_all(bind=engine)
+if "diagnosis" not in {column["name"] for column in inspect(engine).get_columns("workflows")}:
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE workflows ADD COLUMN diagnosis JSON"))
 
 app = FastAPI(title="Hackathon API - Workflow Orchestration")
 

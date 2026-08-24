@@ -420,3 +420,13 @@ input:focus {
     color: var(--text-secondary);
     padding: 24px !important;
 }
+
+.diagnosis-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 18px; }
+.diagnosis-grid > div { background: #0f172a; border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; }
+.diagnosis-grid strong, .diagnosis-label { display: block; }
+.diagnosis-label { color: var(--text-secondary); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.diagnosis-grid strong { margin-top: 5px; font-size: 0.95rem; overflow-wrap: anywhere; }
+#diagnosisCard p:not(.diagnosis-label) { color: var(--text-secondary); margin: 6px 0 16px; }
+#diagnosisActions { color: var(--text-secondary); margin: 6px 0 16px; padding-left: 20px; }
+#diagnosisActions li { margin-bottom: 5px; }
+@media (max-width: 700px) { .diagnosis-grid { grid-template-columns: 1fr; } }

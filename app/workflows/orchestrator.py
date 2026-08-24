@@ -18,6 +18,7 @@ from app.workflows.idempotency import IdempotencyService
 from app.workflows.models import AuditEventType, AuditLog, Workflow, WorkflowStatus
 from app.workflows.step import RetryPolicy, StepDefinition, StepRequest
 from app.workflows.transforms import TransformationRegistry
+from app.workflows.diagnosis import diagnose_failed_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,10 @@ class WorkflowOrchestrator:
                 workflow.updated_at = datetime.utcnow()
                 self.db.commit()
                 self.log_event(workflow.id, AuditEventType.WORKFLOW_FAILED, error_message=f"Workflow failed at step {step_def.name}")
+                workflow.diagnosis = diagnose_failed_workflow(
+                    workflow, self.get_workflow_history(workflow.id)
+                )
+                self.db.commit()
                 return workflow
 
         # All steps completed
