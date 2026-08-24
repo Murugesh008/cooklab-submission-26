@@ -30,8 +30,14 @@ services/crm_service/
    README.md               CRM-specific run instructions
 
 services/inventory_service/
+   main.py                 Standalone Inventory FastAPI application
+   static/                 Inventory frontend served by the service
+
 services/notification_service/
-                          Other workflow services
+   main.py                 Standalone Notification FastAPI application
+   static/                 Notification frontend served by the service
+   notification.db         Notification database, created at runtime
+   README.md               Notification-specific run instructions
 ```
 
 ## Workflow Platform
@@ -100,6 +106,49 @@ The local database is `inventory.db`, created from the process working directory
 - `inventory.db` uses a relative SQLite URL, so its physical location depends on the process working directory. Container deployments still isolate the database in the inventory container, but a configurable absolute database URL would make the boundary more explicit.
 
 The inventory service can therefore be stopped, restarted, or deployed separately from the main app. Workflow execution will observe the service outage and apply the orchestrator's retry/recovery policy.
+
+## Standalone Notification Application
+
+The notification service is a truly independent, separately runnable application at `services/notification_service`. It owns its FastAPI backend, browser frontend, notification model, and SQLite database. The service does not import the main application, access the main application's database, or make outbound calls to inventory, CRM, or the orchestrator.
+
+Start it from the repository root:
+
+```bash
+uvicorn services.notification_service.main:app --host 0.0.0.0 --port 8003
+```
+
+Open the notification UI at:
+
+```text
+http://localhost:8003/
+```
+
+The service also exposes its UI at `http://localhost:8003/static/index.html` and its API documentation at `http://localhost:8003/docs`.
+
+### Notification API
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Notification service health and failure-simulation status |
+| `GET` | `/notifications` | List the 50 most recent notifications |
+| `POST` | `/notifications` | Send a notification (`type`, `recipient`, `subject`, `message`) |
+| `GET` | `/notifications/{notification_id}` | Read one notification |
+| `POST` | `/api/notification/process` | Workflow callback used by the orchestrator |
+
+### Is Notification Truly Independent?
+
+**Yes, operationally and at the data boundary:**
+
+- It runs as its own FastAPI process on port `8003`.
+- It owns its own `NotificationLog` model and SQLite database.
+- It serves its own frontend from `/static` and does not depend on the main app to render its UI.
+- Its frontend calls only the notification service's own origin.
+- The orchestrator communicates with it only through the HTTP contract `/api/notification/process`; it does not access the notification database directly.
+- Docker Compose runs it as a separate `notification-service` container and routes workflow calls to `http://notification-service:8003`.
+
+The notification service can therefore be stopped, restarted, or deployed separately from the main app. Workflow execution will observe the outage and apply the orchestrator's retry/recovery policy.
+
+**Current limitation:** notification delivery is simulated and persisted as `SENT` or `DELIVERED`; the service does not yet connect to an external email, SMS, or push provider. This limitation does not change its service independence, but it means the current system demonstrates delivery workflow and persistence rather than real-world message transmission.
 
 ## Standalone CRM Application
 
