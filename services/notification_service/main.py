@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Literal, Optional
 import logging
 import uuid
 from pathlib import Path
@@ -53,7 +53,7 @@ app.add_middleware(
 failure_simulation = {"is_failed": False, "failure_code": 500, "failure_message": "Notification Service simulated failure"}
 
 class NotificationCreate(BaseModel):
-    type: str = "email" # email, sms, push
+    type: Literal["email"] = "email"
     recipient: str
     subject: Optional[str] = "Notification"
     message: str

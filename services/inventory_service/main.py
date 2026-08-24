@@ -80,6 +80,11 @@ class InventoryItemCreate(BaseModel):
     quantity: int
     status: str = "ACTIVE"
 
+class InventoryItemUpdate(BaseModel):
+    name: str
+    quantity: int
+    status: str = "ACTIVE"
+
 class ProcessRequest(BaseModel):
     workflow_id: int
     step_name: str
@@ -130,6 +135,34 @@ def get_inventory(product_id: str, db: Session = Depends(get_db)):
     if not item:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"product_id": item.product_id, "name": item.name, "available": item.available, "reserved": item.reserved, "status": item.status or "ACTIVE"}
+
+@app.put("/inventory/{product_id}")
+def update_inventory_item(product_id: str, req: InventoryItemUpdate, db: Session = Depends(get_db)):
+    item = db.query(InventoryItem).filter(InventoryItem.product_id == product_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Product not found")
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Item name is required")
+    if req.quantity < item.reserved:
+        raise HTTPException(status_code=400, detail="Quantity cannot be less than reserved stock")
+    if req.status not in {"ACTIVE", "LOW_STOCK", "OUT_OF_STOCK", "DISCONTINUED"}:
+        raise HTTPException(status_code=400, detail="Invalid inventory status")
+    item.name = name
+    item.available = req.quantity - item.reserved
+    item.status = req.status
+    db.commit()
+    db.refresh(item)
+    return {"product_id": item.product_id, "name": item.name, "available": item.available,
+            "reserved": item.reserved, "status": item.status}
+
+@app.delete("/inventory/{product_id}", status_code=204)
+def delete_inventory_item(product_id: str, db: Session = Depends(get_db)):
+    item = db.query(InventoryItem).filter(InventoryItem.product_id == product_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Product not found")
+    db.delete(item)
+    db.commit()
 
 @app.post("/inventory/reserve")
 def reserve_inventory(req: ReserveRequest, db: Session = Depends(get_db)):
