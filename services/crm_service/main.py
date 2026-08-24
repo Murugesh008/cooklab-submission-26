@@ -306,8 +306,11 @@ def process_step(req: ProcessRequest, db: Session = Depends(get_db)):
     # Store customer event in CRM database
     db_cust = db.query(Customer).filter(Customer.email == customer_email).first()
     if not db_cust:
-        db_cust = Customer(email=customer_email, name=customer_email.split("@")[0], source="workflow_event")
+        db_cust = Customer(email=customer_email, name=customer_email.split("@")[0], source="directory")
         db.add(db_cust)
+        db.commit()
+    elif db_cust.source == "workflow_event":
+        db_cust.source = "directory"
         db.commit()
     
     event_data = {
