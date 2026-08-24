@@ -88,7 +88,11 @@ class OrderService:
                 name="crm",
                 service_endpoint=crm_url,
                 retry_policy=RetryPolicy(max_attempts=2),
-                transform_request=lambda p: {"customer_email": p.get("customer_email")},
+                transform_request=lambda p: {
+                    "customer_email": p.get("customer_email"),
+                    "sku": p.get("sku"),
+                    "quantity": p.get("quantity"),
+                },
                 transform_response=lambda r: r,
             ),
             StepDefinition(

@@ -37,6 +37,7 @@
 
   <dialog id="customerDialog"><form method="dialog" id="customerForm" class="dialog-card"><button class="close" value="cancel" aria-label="Close">×</button><span class="eyebrow" id="dialogEyebrow">NEW PROFILE</span><h2 id="dialogTitle">Add customer</h2><input type="hidden" id="customerId"><label>Name<input id="customerName" maxlength="120" placeholder="Optional display name"></label><label>Email<input id="customerEmail" type="email" required></label><p id="customerError" class="form-error"></p><div class="dialog-actions"><button class="button light" value="cancel">Cancel</button><button class="button primary" value="default" id="saveCustomer">Create customer</button></div></form></dialog>
   <dialog id="detailDialog"><div class="dialog-card detail-card"><button class="close" id="closeDetail" aria-label="Close">×</button><span class="eyebrow">CUSTOMER PROFILE</span><div id="detailContent"></div></div></dialog>
+  <style>.expand-order{display:block;margin-top:14px;padding:0;border:0;background:none;color:var(--green);font-size:11px;font-weight:700;text-align:left}.expand-order span{font-size:14px;margin-left:4px}.order-details{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);color:var(--green);font-size:12px}.order-details div{padding:5px 0}.order-details strong{display:block}.order-details small{display:block;color:var(--muted);font-size:10px;margin-top:2px}</style>
   <script src="/static/crm/app.js"></script>
 </body>
 </html>

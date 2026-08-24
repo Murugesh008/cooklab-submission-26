@@ -9,7 +9,7 @@ from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 from typing import Dict, Any, List, Optional
 import logging
-from sqlalchemy import create_engine, Column, Integer, String, JSON, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, JSON, DateTime, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 import os
 from dotenv import load_dotenv
@@ -31,6 +31,7 @@ class Customer(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     name = Column(String, nullable=True)
+    source = Column(String, default="directory", nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -49,6 +50,23 @@ class CRMUser(Base):
     hashed_password = Column(String, nullable=False)
 
 Base.metadata.create_all(bind=engine)
+
+if "source" not in {column["name"] for column in inspect(engine).get_columns("customers")}:
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE customers ADD COLUMN source VARCHAR DEFAULT 'directory' NOT NULL"))
+
+with engine.begin() as connection:
+    connection.execute(text("""
+        UPDATE customers
+        SET source = 'workflow_event'
+        WHERE source = 'directory'
+          AND name = substr(email, 1, instr(email, '@') - 1)
+          AND EXISTS (
+              SELECT 1 FROM customer_events
+              WHERE customer_events.customer_id = customers.email
+                AND customer_events.event_type = 'ORDER_PLACED'
+          )
+    """))
 
 def get_db():
     db = SessionLocal()
@@ -188,8 +206,14 @@ def create_customer(cust: CustomerCreate, db: Session = Depends(get_db), _: CRMU
     ensure_available()
     db_cust = db.query(Customer).filter(Customer.email == cust.email).first()
     if db_cust:
+        if db_cust.source == "workflow_event":
+            db_cust.source = "directory"
+            db_cust.name = cust.name
+            db.commit()
+            db.refresh(db_cust)
+            return customer_payload(db_cust)
         raise HTTPException(status_code=409, detail="A customer with this email already exists")
-    db_cust = Customer(email=cust.email, name=cust.name)
+    db_cust = Customer(email=cust.email, name=cust.name, source="directory")
     db.add(db_cust)
     db.commit()
     db.refresh(db_cust)
@@ -198,7 +222,7 @@ def create_customer(cust: CustomerCreate, db: Session = Depends(get_db), _: CRMU
 @app.get("/customers")
 def list_customers(search: Optional[str] = Query(default=None), db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
-    query = db.query(Customer)
+    query = db.query(Customer).filter(Customer.source == "directory")
     if search:
         term = f"%{search}%"
         query = query.filter((Customer.name.ilike(term)) | (Customer.email.ilike(term)))
@@ -207,7 +231,7 @@ def list_customers(search: Optional[str] = Query(default=None), db: Session = De
 @app.put("/customers/{customer_id}")
 def update_customer(customer_id: int, cust: CustomerUpdate, db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
-    db_cust = db.query(Customer).filter(Customer.id == customer_id).first()
+    db_cust = db.query(Customer).filter(Customer.id == customer_id, Customer.source == "directory").first()
     if not db_cust:
         raise HTTPException(status_code=404, detail="Customer not found")
     if cust.email is not None and cust.email != db_cust.email:
@@ -224,7 +248,7 @@ def update_customer(customer_id: int, cust: CustomerUpdate, db: Session = Depend
 @app.delete("/customers/{customer_id}", status_code=204)
 def delete_customer(customer_id: int, db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
-    db_cust = db.query(Customer).filter(Customer.id == customer_id).first()
+    db_cust = db.query(Customer).filter(Customer.id == customer_id, Customer.source == "directory").first()
     if not db_cust:
         raise HTTPException(status_code=404, detail="Customer not found")
     db.query(CustomerEvent).filter(CustomerEvent.customer_id == db_cust.email).delete()
@@ -234,7 +258,7 @@ def delete_customer(customer_id: int, db: Session = Depends(get_db), _: CRMUser 
 @app.get("/customers/{customer_id}")
 def get_customer(customer_id: str, db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
-    db_cust = db.query(Customer).filter(Customer.id == int(customer_id)).first()
+    db_cust = db.query(Customer).filter(Customer.id == int(customer_id), Customer.source == "directory").first()
     if not db_cust:
         raise HTTPException(status_code=404, detail="Customer not found")
     return customer_payload(db_cust)
@@ -242,7 +266,7 @@ def get_customer(customer_id: str, db: Session = Depends(get_db), _: CRMUser = D
 @app.get("/customers/{customer_id}/events")
 def list_events(customer_id: int, db: Session = Depends(get_db), _: CRMUser = Depends(get_current_user)):
     ensure_available()
-    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    customer = db.query(Customer).filter(Customer.id == customer_id, Customer.source == "directory").first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     events = db.query(CustomerEvent).filter(CustomerEvent.customer_id == customer.email).order_by(CustomerEvent.created_at.desc()).all()
@@ -281,7 +305,7 @@ def process_step(req: ProcessRequest, db: Session = Depends(get_db)):
     # Store customer event in CRM database
     db_cust = db.query(Customer).filter(Customer.email == customer_email).first()
     if not db_cust:
-        db_cust = Customer(email=customer_email, name=customer_email.split("@")[0])
+        db_cust = Customer(email=customer_email, name=customer_email.split("@")[0], source="workflow_event")
         db.add(db_cust)
         db.commit()
     
@@ -289,6 +313,9 @@ def process_step(req: ProcessRequest, db: Session = Depends(get_db)):
         "workflow_id": req.workflow_id,
         "attempt": req.attempt
     }
+    for field in ("sku", "quantity"):
+        if req.payload.get(field) is not None:
+            event_data[field] = req.payload[field]
     event_record = CustomerEvent(customer_id=customer_email, event_type="ORDER_PLACED", data=event_data)
     db.add(event_record)
     db.commit()
