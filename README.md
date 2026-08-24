@@ -1,9 +1,8 @@
-# Hackathon boilerplate (FastAPI)
+# Hackathon boilerplate (FastAPI) + Workflow Orchestration
 
-Working auth + DB + API skeleton, ready to deploy to Render. Build your
-actual idea on top of this once the problem statement drops.
+Working auth + DB + API skeleton, ready to deploy to Render, with a complete **Fault-Tolerant Multi-System Workflow Orchestration** foundation built on top.
 
-## What's already wired up
+## What's Already Wired Up (Original)
 
 - `POST /api/auth/register` — create a user
 - `POST /api/auth/login` — get a JWT access token
@@ -14,12 +13,54 @@ actual idea on top of this once the problem statement drops.
 - Tables auto-create on startup (no Alembic — intentional, see `main.py` comment)
 - Global JSON error handler so a crash returns JSON, not an HTML error page
 
-## 1. Run it locally
+## What's New: Workflow Orchestration Foundation
+
+A complete **structural foundation** for Order → Inventory → CRM → Notification workflow orchestration:
+
+- **Orchestrator engine** — executes multi-step workflows, handles retries, logs events
+- **Independent services** — Inventory, CRM, Notification each with own API & database boundary
+- **Order entry point** — REST API to create orders and trigger workflows
+- **Audit logging** — complete immutable history of all workflow events
+- **Step abstraction** — pipeline-oriented workflow definition (not yet fully generic)
+- **Retry & idempotency boundaries** — structural support for future fault-tolerance features
+- **Transformation layer** — isolates service input/output mapping
+- **Vanilla frontend dashboard** — real-time workflow status visualization & execution logs
+
+**See [WORKFLOW_STRUCTURE.md](WORKFLOW_STRUCTURE.md) for detailed architecture & design decisions.**
+
+### Quick Start: Workflow Demo
 
 ```bash
 cd hackathon-boilerplate
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env
+python -c "import secrets; print(secrets.token_hex(32))" > .env  # optional: generate SECRET_KEY
+
+uvicorn app.main:app --reload
+```
+
+Then open:
+- **API Docs**: http://127.0.0.1:8000/docs
+- **Workflow Dashboard**: http://127.0.0.1:8000/static/index.html
+
+Create an order via the dashboard or API:
+
+```bash
+curl -X POST http://localhost:8000/api/order/create \
+  -H "Content-Type: application/json" \
+  -d '{"customer_email": "customer@example.com", "sku": "ITEM-001", "quantity": 5}'
+```
+
+Watch the workflow execute through Inventory → CRM → Notification.
+
+---
+
+## Existing Setup (Unchanged)
+
+### 1. Run it locally
+
+```bash
+cd hackathon-boilerplate     
 pip install -r requirements.txt
 cp .env.example .env
 ```
@@ -30,11 +71,6 @@ Generate a real secret key and put it in `.env`:
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-Paste the output into `.env` as `SECRET_KEY=...`. Leave `DATABASE_URL` as the
-default SQLite line for local dev.
-
-Start the server:
-
 ```bash
 uvicorn app.main:app --reload
 ```
@@ -43,12 +79,12 @@ Open http://127.0.0.1:8000/docs — you should see the Swagger UI. Try
 `/api/health` first (should return `{"status": "ok"}`), then register a user
 via `/api/auth/register`, then log in via `/api/auth/login` to get a token.
 
-## 2. Push to GitHub
+### 2. Push to GitHub
 
 ```bash
 git init
 git add .
-git commit -m "Hackathon boilerplate: auth, db, api scaffold"
+git commit -m "Hackathon boilerplate: auth, db, api scaffold + workflow orchestration"
 ```
 
 Create a new empty repo on GitHub (no README/gitignore, you already have

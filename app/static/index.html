@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Orchestration Demo</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Workflow Orchestration Demo</h1>
+            <p>Create orders and observe the workflow execution pipeline</p>
+        </header>
+
+        <main>
+            <!-- Order Creation Section -->
+            <section class="section">
+                <h2>Create Order</h2>
+                <form id="orderForm" class="form">
+                    <div class="form-group">
+                        <label for="customerEmail">Customer Email:</label>
+                        <input type="email" id="customerEmail" name="customerEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sku">SKU:</label>
+                        <input type="text" id="sku" name="sku" value="ITEM-001" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="quantity">Quantity:</label>
+                        <input type="number" id="quantity" name="quantity" value="1" min="1" required>
+                    </div>
+                    <button type="submit" class="btn">Create Order & Execute Workflow</button>
+                </form>
+            </section>
+
+            <!-- Workflow Status Section -->
+            <section class="section">
+                <h2>Workflow Status</h2>
+                <div id="statusPanel" class="status-panel">
+                    <p class="placeholder">Create an order to see workflow status</p>
+                </div>
+            </section>
+
+            <!-- Execution Log Section -->
+            <section class="section">
+                <h2>Execution Log</h2>
+                <div id="logPanel" class="log-panel">
+                    <p class="placeholder">Logs will appear here</p>
+                </div>
+            </section>
+
+            <!-- Query Existing Workflow Section -->
+            <section class="section">
+                <h2>Query Workflow</h2>
+                <form id="queryForm" class="form">
+                    <div class="form-group">
+                        <label for="orderId">Order ID:</label>
+                        <input type="text" id="orderId" name="orderId" placeholder="ORD-12345678" required>
+                    </div>
+                    <button type="submit" class="btn">Get Status</button>
+                </form>
+            </section>
+        </main>
+
+        <footer>
+            <p>Backend: FastAPI | Orchestration: Multi-service workflow with retry &amp; audit logging</p>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
