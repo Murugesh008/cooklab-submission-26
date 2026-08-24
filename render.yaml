@@ -1,6 +1,7 @@
 services:
+  # --- Main app: order intake, orchestrator, auth ---
   - type: web
-    name: hackathon-api
+    name: cooklab-api
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -10,9 +11,47 @@ services:
         generateValue: true
       - key: DATABASE_URL
         fromDatabase:
-          name: hackathon-db
+          name: cooklab-db
           property: connectionString
+      # Predictable because Render names services exactly as given below -
+      # https://<name>.onrender.com - so these can be hardcoded rather than
+      # looked up.
+      - key: INVENTORY_SERVICE_URL
+        value: https://cooklab-inventory.onrender.com
+      - key: CRM_SERVICE_URL
+        value: https://cooklab-crm.onrender.com
+      - key: NOTIFICATION_SERVICE_URL
+        value: https://cooklab-notification.onrender.com
+
+  # --- Inventory microservice ---
+  - type: web
+    name: cooklab-inventory
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn services.inventory_service.main:app --host 0.0.0.0 --port $PORT
+
+  # --- CRM microservice ---
+  - type: web
+    name: cooklab-crm
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn services.crm_service.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      # CRM crashes on startup without this - it has its own JWT auth,
+      # separate from the main app's SECRET_KEY.
+      - key: CRM_SECRET_KEY
+        generateValue: true
+
+  # --- Notification microservice ---
+  - type: web
+    name: cooklab-notification
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn services.notification_service.main:app --host 0.0.0.0 --port $PORT
 
 databases:
-  - name: hackathon-db
+  - name: cooklab-db
     plan: free
