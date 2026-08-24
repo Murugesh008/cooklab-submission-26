@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Depends, Query, status as http_status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -353,3 +354,13 @@ def status():
         "is_failed": failure_simulation["is_failed"],
         "failure_message": failure_simulation["failure_message"]
     }
+
+# Root -> CRM's dashboard page. Note the extra "crm" folder level here -
+# unlike inventory/notification, crm's static assets live under
+# static/crm/, not directly under static/, so the redirect target and
+# mount need to account for that nesting.
+@app.get("/", include_in_schema=False)
+def crm_home():
+    return RedirectResponse(url="/static/crm/index.html")
+
+app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static", html=True), name="crm-static")
