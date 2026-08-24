@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional
 import logging
 from pathlib import Path
-from sqlalchemy import create_engine, Column, Integer, String, inspect, text
+from sqlalchemy import create_engine, Column, Integer, String, JSON, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +26,12 @@ class InventoryItem(Base):
     available = Column(Integer, default=0)
     reserved = Column(Integer, default=0)
     status = Column(String, default="ACTIVE")
+
+class ProcessedOperation(Base):
+    __tablename__ = "processed_operations"
+    id = Column(Integer, primary_key=True, index=True)
+    operation_id = Column(String, unique=True, index=True, nullable=False)
+    response = Column(JSON, nullable=False)
 
 Base.metadata.create_all(bind=engine)
 
@@ -198,6 +204,11 @@ def release_inventory(req: ReserveRequest, db: Session = Depends(get_db)):
 
 @app.post("/api/inventory/process")
 def process_step(req: ProcessRequest, db: Session = Depends(get_db)):
+    operation_id = req.payload.get("operation_id", f"{req.workflow_id}:{req.step_name}")
+    cached = db.query(ProcessedOperation).filter(ProcessedOperation.operation_id == operation_id).first()
+    if cached:
+        return cached.response
+
     if failure_simulation["is_failed"]:
         logger.warning(f"[INVENTORY] Rejecting request due to simulated failure for workflow {req.workflow_id}")
         return {
@@ -223,7 +234,7 @@ def process_step(req: ProcessRequest, db: Session = Depends(get_db)):
     
     logger.info(f"[INVENTORY] Reserved {quantity} of {sku} for workflow {req.workflow_id}")
     
-    return {
+    result = {
         "success": True,
         "message": f"Successfully reserved {quantity} of {sku}",
         "data": {
@@ -233,6 +244,9 @@ def process_step(req: ProcessRequest, db: Session = Depends(get_db)):
             "inventory_id": f"INV-{req.workflow_id}"
         }
     }
+    db.add(ProcessedOperation(operation_id=operation_id, response=result))
+    db.commit()
+    return result
 
 @app.post("/admin/simulate-failure")
 def simulate_failure(code: int = 500, message: str = "Simulated Inventory Service Outage"):

@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Literal, Optional
 import logging
 import uuid
 from pathlib import Path
-from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy import create_engine, Column, Integer, String, JSON
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +29,12 @@ class NotificationLog(Base):
     message = Column(String)
     status = Column(String)
     workflow_id = Column(Integer, nullable=True)
+
+class ProcessedOperation(Base):
+    __tablename__ = "processed_operations"
+    id = Column(Integer, primary_key=True, index=True)
+    operation_id = Column(String, unique=True, index=True, nullable=False)
+    response = Column(JSON, nullable=False)
 
 Base.metadata.create_all(bind=engine)
 
@@ -134,6 +140,11 @@ def list_notifications(db: Session = Depends(get_db)):
 
 @app.post("/api/notification/process")
 def process_step(req: ProcessRequest, db: Session = Depends(get_db)):
+    operation_id = req.payload.get("operation_id", f"{req.workflow_id}:{req.step_name}")
+    cached = db.query(ProcessedOperation).filter(ProcessedOperation.operation_id == operation_id).first()
+    if cached:
+        return cached.response
+
     if failure_simulation["is_failed"]:
         logger.warning(f"[NOTIFICATION] Rejecting request due to simulated failure for workflow {req.workflow_id}")
         return {
@@ -161,7 +172,7 @@ def process_step(req: ProcessRequest, db: Session = Depends(get_db)):
     
     logger.info(f"[NOTIFICATION] Sent email to {recipient} for workflow {req.workflow_id}")
     
-    return {
+    result = {
         "success": True,
         "message": f"Notification sent to {recipient}",
         "data": {
@@ -170,6 +181,9 @@ def process_step(req: ProcessRequest, db: Session = Depends(get_db)):
             "status": "SENT"
         }
     }
+    db.add(ProcessedOperation(operation_id=operation_id, response=result))
+    db.commit()
+    return result
 
 @app.post("/admin/simulate-failure")
 def simulate_failure(code: int = 500, message: str = "Simulated Notification Service Outage"):
