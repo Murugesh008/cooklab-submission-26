@@ -1,9 +1,12 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 import logging
-from sqlalchemy import create_engine, Column, Integer, String
+from pathlib import Path
+from sqlalchemy import create_engine, Column, Integer, String, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 logging.basicConfig(level=logging.INFO)
@@ -22,8 +25,13 @@ class InventoryItem(Base):
     name = Column(String)
     available = Column(Integer, default=0)
     reserved = Column(Integer, default=0)
+    status = Column(String, default="ACTIVE")
 
 Base.metadata.create_all(bind=engine)
+
+if "status" not in {column["name"] for column in inspect(engine).get_columns("inventory")}:
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE inventory ADD COLUMN status VARCHAR DEFAULT 'ACTIVE'"))
 
 def get_db():
     db = SessionLocal()
@@ -36,9 +44,9 @@ def get_db():
 def seed_db():
     db = SessionLocal()
     default_items = [
-        {"product_id": "ITEM-001", "name": "Laptop", "available": 50, "reserved": 5},
-        {"product_id": "ITEM-002", "name": "Headphones", "available": 100, "reserved": 10},
-        {"product_id": "DEFAULT-SKU", "name": "Generic Item", "available": 200, "reserved": 0},
+        {"product_id": "ITEM-001", "name": "Laptop", "available": 50, "reserved": 5, "status": "ACTIVE"},
+        {"product_id": "ITEM-002", "name": "Headphones", "available": 100, "reserved": 10, "status": "ACTIVE"},
+        {"product_id": "DEFAULT-SKU", "name": "Generic Item", "available": 200, "reserved": 0, "status": "ACTIVE"},
     ]
     for item_data in default_items:
         if not db.query(InventoryItem).filter(InventoryItem.product_id == item_data["product_id"]).first():
@@ -66,6 +74,12 @@ class ReserveRequest(BaseModel):
     sku: str
     quantity: int
 
+class InventoryItemCreate(BaseModel):
+    product_id: str
+    name: str
+    quantity: int
+    status: str = "ACTIVE"
+
 class ProcessRequest(BaseModel):
     workflow_id: int
     step_name: str
@@ -80,6 +94,34 @@ def health():
         "simulated_failure": failure_simulation["is_failed"]
     }
 
+@app.get("/inventory")
+def list_inventory(db: Session = Depends(get_db)):
+    return [
+        {"product_id": item.product_id, "name": item.name, "available": item.available,
+         "reserved": item.reserved, "status": item.status or "ACTIVE"}
+        for item in db.query(InventoryItem).order_by(InventoryItem.product_id).all()
+    ]
+
+@app.post("/inventory", status_code=201)
+def add_inventory_item(req: InventoryItemCreate, db: Session = Depends(get_db)):
+    product_id = req.product_id.strip()
+    name = req.name.strip()
+    if not product_id or not name:
+        raise HTTPException(status_code=400, detail="Product ID and name are required")
+    if req.quantity < 0:
+        raise HTTPException(status_code=400, detail="Quantity cannot be negative")
+    if req.status not in {"ACTIVE", "LOW_STOCK", "OUT_OF_STOCK", "DISCONTINUED"}:
+        raise HTTPException(status_code=400, detail="Invalid inventory status")
+    if db.query(InventoryItem).filter(InventoryItem.product_id == product_id).first():
+        raise HTTPException(status_code=409, detail="Product ID already exists")
+    item = InventoryItem(product_id=product_id, name=name, available=req.quantity,
+                         reserved=0, status=req.status)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return {"product_id": item.product_id, "name": item.name, "available": item.available,
+            "reserved": item.reserved, "status": item.status}
+
 @app.get("/inventory/{product_id}")
 def get_inventory(product_id: str, db: Session = Depends(get_db)):
     if failure_simulation["is_failed"]:
@@ -87,7 +129,7 @@ def get_inventory(product_id: str, db: Session = Depends(get_db)):
     item = db.query(InventoryItem).filter(InventoryItem.product_id == product_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Product not found")
-    return {"product_id": item.product_id, "name": item.name, "available": item.available, "reserved": item.reserved}
+    return {"product_id": item.product_id, "name": item.name, "available": item.available, "reserved": item.reserved, "status": item.status or "ACTIVE"}
 
 @app.post("/inventory/reserve")
 def reserve_inventory(req: ReserveRequest, db: Session = Depends(get_db)):
@@ -103,6 +145,7 @@ def reserve_inventory(req: ReserveRequest, db: Session = Depends(get_db)):
     
     item.available -= req.quantity
     item.reserved += req.quantity
+    item.status = "OUT_OF_STOCK" if item.available == 0 else "LOW_STOCK" if item.available <= 10 else "ACTIVE"
     db.commit()
     return {"status": "reserved", "sku": req.sku, "quantity": req.quantity, "remaining": item.available}
 
@@ -116,6 +159,7 @@ def release_inventory(req: ReserveRequest, db: Session = Depends(get_db)):
         
     item.available += req.quantity
     item.reserved = max(0, item.reserved - req.quantity)
+    item.status = "ACTIVE"
     db.commit()
     return {"status": "released", "sku": req.sku, "quantity": req.quantity}
 
@@ -141,6 +185,7 @@ def process_step(req: ProcessRequest, db: Session = Depends(get_db)):
     
     item.available -= quantity
     item.reserved += quantity
+    item.status = "OUT_OF_STOCK" if item.available == 0 else "LOW_STOCK" if item.available <= 10 else "ACTIVE"
     db.commit()
     
     logger.info(f"[INVENTORY] Reserved {quantity} of {sku} for workflow {req.workflow_id}")
@@ -177,3 +222,9 @@ def status():
         "is_failed": failure_simulation["is_failed"],
         "failure_message": failure_simulation["failure_message"]
     }
+
+@app.get("/", include_in_schema=False)
+def inventory_home():
+    return RedirectResponse(url="/static/index.html")
+
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="inventory-static")

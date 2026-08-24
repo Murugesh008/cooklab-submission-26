@@ -10,14 +10,12 @@ from app.db.database import Base, engine
 from app.models.user import User
 from app.workflows.models import Workflow, AuditLog
 from app.order.models import Order
-from app.services.inventory.models import InventoryItem
 from app.services.crm.models import CRMRecord
 from app.services.notification.models import Notification
 
 # Import routers
 from app.routers import auth, health, admin
 from app.order.routers import router as order_router
-from app.services.inventory.routers import router as inventory_router
 from app.services.crm.routers import router as crm_router
 from app.services.notification.routers import router as notification_router
 
@@ -59,7 +57,6 @@ app.include_router(admin.router)
 
 # Include workflow and service routers
 app.include_router(order_router)
-app.include_router(inventory_router)
 app.include_router(crm_router)
 app.include_router(notification_router)
 
