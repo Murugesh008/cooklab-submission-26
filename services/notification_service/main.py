@@ -1,9 +1,12 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 import logging
 import uuid
+from pathlib import Path
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
@@ -114,6 +117,21 @@ def get_notification(notification_id: str, db: Session = Depends(get_db)):
         "status": record.status
     }
 
+@app.get("/notifications")
+def list_notifications(db: Session = Depends(get_db)):
+    records = db.query(NotificationLog).order_by(NotificationLog.id.desc()).limit(50).all()
+    return [
+        {
+            "notification_id": record.notification_id,
+            "type": record.type,
+            "recipient": record.recipient,
+            "subject": record.subject,
+            "message": record.message,
+            "status": record.status,
+        }
+        for record in records
+    ]
+
 @app.post("/api/notification/process")
 def process_step(req: ProcessRequest, db: Session = Depends(get_db)):
     if failure_simulation["is_failed"]:
@@ -174,3 +192,9 @@ def status():
         "is_failed": failure_simulation["is_failed"],
         "failure_message": failure_simulation["failure_message"]
     }
+
+@app.get("/", include_in_schema=False)
+def notification_home():
+    return RedirectResponse(url="/static/index.html")
+
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="notification-static")
