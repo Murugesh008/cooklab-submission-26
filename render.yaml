@@ -7,6 +7,8 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
       - key: SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
@@ -30,6 +32,9 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn services.inventory_service.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
 
   # --- CRM microservice ---
   - type: web
@@ -39,6 +44,8 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn services.crm_service.main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
       # CRM crashes on startup without this - it has its own JWT auth,
       # separate from the main app's SECRET_KEY.
       - key: CRM_SECRET_KEY
@@ -51,6 +58,9 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn services.notification_service.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
 
 databases:
   - name: cooklab-db
