@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRM Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/crm/style.css">
+</head>
+<body>
+  <div id="toast" class="toast" role="status"></div>
+  <section id="authView" class="auth-shell">
+    <div class="auth-art"><span class="eyebrow">COOKLAB / CRM</span><h1>Know every customer.<br><em>Move with intent.</em></h1><p>A focused workspace for the relationships behind every order.</p></div>
+    <form id="authForm" class="auth-card">
+      <span class="eyebrow">WELCOME BACK</span><h2 id="authTitle">Sign in to CRM</h2><p id="authHint">Use your existing Cooklab account.</p>
+      <label>Email<input id="authEmail" type="email" required autocomplete="email"></label>
+      <label>Password<input id="authPassword" type="password" required minlength="6" autocomplete="current-password"></label>
+      <button class="button primary" type="submit" id="authSubmit">Sign in</button>
+      <button class="text-button" type="button" id="authToggle">Need an account? Register</button>
+      <p id="authError" class="form-error"></p>
+    </form>
+  </section>
+
+  <div id="appView" class="app-shell hidden">
+    <aside class="sidebar"><div class="brand"><span class="brand-mark">C</span><span>cooklab<small>CRM workspace</small></span></div>
+      <nav><button class="nav-item active" data-view="dashboard">Overview</button><button class="nav-item" data-view="customers">Customers</button></nav>
+      <div class="sidebar-foot"><div class="user-chip"><span class="avatar" id="userAvatar">U</span><span id="userEmail">User</span></div><button class="text-button" id="logoutBtn">Sign out</button></div>
+    </aside>
+    <main class="main"><header class="topbar"><div><span class="eyebrow">CUSTOMER RELATIONSHIPS</span><h1 id="pageTitle">Overview</h1></div><div class="top-actions"><span class="service-status" id="serviceStatus"><i></i> Checking CRM service</span><button class="icon-button" id="refreshBtn" aria-label="Refresh data">↻</button><button class="button primary" id="headerAddBtn">+ Add customer</button></div></header>
+      <div id="offlineBanner" class="offline hidden"><strong>CRM service unavailable</strong><span>We cannot currently connect to the CRM backend. Your workspace will recover when it is available.</span><button class="button light" id="retryBtn">Retry</button></div>
+      <section id="dashboardView" class="view"><div class="welcome"><div><span class="eyebrow">MONDAY, CUSTOMER DESK</span><h2>Good work starts with<br><em>good context.</em></h2></div><p>Keep the signal close. Review your customer base and follow the latest touchpoints.</p></div><div class="stat-grid" id="stats"><div class="stat"><span>Total customers</span><strong>--</strong></div><div class="stat"><span>Active profiles</span><strong>--</strong></div><div class="stat"><span>Added this week</span><strong>--</strong></div><div class="stat"><span>Recent activities</span><strong>--</strong></div></div><div class="section-heading"><div><span class="eyebrow">CUSTOMER DIRECTORY</span><h2>Recent customers</h2></div><button class="text-button" data-view="customers">View all →</button></div><div id="recentCustomers" class="customer-list"></div></section>
+      <section id="customersView" class="view hidden"><div class="section-heading directory-head"><div><span class="eyebrow">ALL RELATIONSHIPS</span><h2>Customers</h2></div><button class="button primary" id="addBtn">+ Add customer</button></div><div class="toolbar"><label class="search"><span>⌕</span><input id="searchInput" placeholder="Search name or email"></label><span id="customerCount" class="muted"></span></div><div id="customersTable" class="table-wrap"></div></section>
+    </main>
+  </div>
+
+  <dialog id="customerDialog"><form method="dialog" id="customerForm" class="dialog-card"><button class="close" value="cancel" aria-label="Close">×</button><span class="eyebrow" id="dialogEyebrow">NEW PROFILE</span><h2 id="dialogTitle">Add customer</h2><input type="hidden" id="customerId"><label>Name<input id="customerName" maxlength="120" placeholder="Optional display name"></label><label>Email<input id="customerEmail" type="email" required></label><p id="customerError" class="form-error"></p><div class="dialog-actions"><button class="button light" value="cancel">Cancel</button><button class="button primary" value="default" id="saveCustomer">Create customer</button></div></form></dialog>
+  <dialog id="detailDialog"><div class="dialog-card detail-card"><button class="close" id="closeDetail" aria-label="Close">×</button><span class="eyebrow">CUSTOMER PROFILE</span><div id="detailContent"></div></div></dialog>
+  <script src="/static/crm/app.js"></script>
+</body>
+</html>

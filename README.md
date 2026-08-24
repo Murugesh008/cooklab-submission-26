@@ -1,6 +1,6 @@
-# Hackathon boilerplate (FastAPI) + Workflow Orchestration
+# Cooklab Workflow Platform and CRM Service
 
-Working auth + DB + API skeleton, ready to deploy to Render, with a complete **Fault-Tolerant Multi-System Workflow Orchestration** foundation built on top.
+This repository contains the original workflow platform and a separately runnable CRM application. The workflow platform owns authentication, orders, workflow state, and orchestration. The CRM application owns customer profiles, customer events, its frontend, and its CRM database.
 
 ## What's Already Wired Up (Original)
 
@@ -13,7 +13,28 @@ Working auth + DB + API skeleton, ready to deploy to Render, with a complete **F
 - Tables auto-create on startup (no Alembic — intentional, see `main.py` comment)
 - Global JSON error handler so a crash returns JSON, not an HTML error page
 
-## What's New: Workflow Orchestration Foundation
+## Repository Layout
+
+```text
+app/
+   main.py                 Main API: auth, orders, workflow dashboard, legacy CRM workflow boundary
+   db/                     Main application database setup
+   models/                 Main application models, including users
+   workflows/              Orchestrator, retries, idempotency, and audit logs
+   static/                 Original workflow dashboard and a legacy CRM frontend copy
+
+services/crm_service/
+   main.py                 Standalone CRM FastAPI application
+   static/crm/             Canonical CRM frontend served by the CRM application
+   crm.db                  Standalone CRM SQLite database, created at runtime
+   README.md               CRM-specific run instructions
+
+services/inventory_service/
+services/notification_service/
+                          Other workflow services
+```
+
+## Workflow Platform
 
 A complete **structural foundation** for Order → Inventory → CRM → Notification workflow orchestration:
 
@@ -26,7 +47,137 @@ A complete **structural foundation** for Order → Inventory → CRM → Notific
 - **Transformation layer** — isolates service input/output mapping
 - **Vanilla frontend dashboard** — real-time workflow status visualization & execution logs
 
-**See [WORKFLOW_STRUCTURE.md](WORKFLOW_STRUCTURE.md) for detailed architecture & design decisions.**
+The workflow platform executes Order -> Inventory -> CRM -> Notification workflows. The orchestrator communicates with downstream services over HTTP and does not access their databases directly.
+
+See [WORKFLOW_STRUCTURE.md](WORKFLOW_STRUCTURE.md) for detailed architecture and design decisions.
+
+## Standalone Inventory Application
+
+The inventory service is an independently runnable application at `services/inventory_service`. It owns its FastAPI backend, browser UI, inventory model, and SQLite database. It has no imports from the CRM or notification services and makes no outbound HTTP calls to them.
+
+Start it from the repository root:
+
+```bash
+uvicorn services.inventory_service.main:app --host 0.0.0.0 --port 8001
+```
+
+Open the inventory UI at:
+
+```text
+http://localhost:8001/
+```
+
+The service also exposes its UI at `http://localhost:8001/static/index.html` and its API documentation at `http://localhost:8001/docs`.
+
+### Inventory API
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Inventory service health and failure-simulation status |
+| `GET` | `/inventory` | List inventory items |
+| `POST` | `/inventory` | Add an item (`product_id`, `name`, `quantity`, `status`) |
+| `GET` | `/inventory/{product_id}` | Read one item |
+| `POST` | `/inventory/reserve` | Reserve stock for an SKU and quantity |
+| `POST` | `/inventory/release` | Release reserved stock |
+| `POST` | `/api/inventory/process` | Workflow callback used by the orchestrator |
+
+The local database is `inventory.db`, created from the process working directory. The service seeds `ITEM-001`, `ITEM-002`, and `DEFAULT-SKU` on startup. Failure demonstration controls are available at `/admin/simulate-failure`, `/admin/recover`, and `/admin/status`.
+
+### Is Inventory Truly Independent?
+
+**Yes, operationally and at the data boundary:**
+
+- It runs as its own FastAPI process on port `8001`.
+- It has its own SQLAlchemy `InventoryItem` model and SQLite database.
+- It serves its own frontend and does not depend on the main app to render its UI.
+- It does not call CRM, notification, or orchestrator services.
+- The orchestrator calls it through the HTTP contract `/api/inventory/process`; this is an inbound workflow integration, not a direct database dependency.
+- Docker Compose builds it from `services/inventory_service/Dockerfile` as a separate container.
+
+**Current limitations:**
+
+- Inventory API routes do not currently require authentication.
+- `inventory.db` uses a relative SQLite URL, so its physical location depends on the process working directory. Container deployments still isolate the database in the inventory container, but a configurable absolute database URL would make the boundary more explicit.
+
+The inventory service can therefore be stopped, restarted, or deployed separately from the main app. Workflow execution will observe the service outage and apply the orchestrator's retry/recovery policy.
+
+## Standalone CRM Application
+
+The canonical CRM application is `services/crm_service`. Its FastAPI backend, frontend, and customer database run as one separately deployable process on port `8002`.
+
+Start the authentication provider and CRM application in separate terminals from the repository root:
+
+```bash
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000                         # authentication provider
+uvicorn services.crm_service.main:app --reload --port 8002        # CRM application
+```
+
+Open the CRM at:
+
+```text
+http://localhost:8002/static/crm/
+```
+
+The CRM UI calls its own origin for customer and activity APIs. It calls the main application only for login, registration, and `/api/auth/me`. If authentication is hosted elsewhere, set `authApiUrl` in browser local storage to that server's `/api` URL.
+
+### CRM API
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | CRM service health and failure-simulation status |
+| `GET` | `/customers?search=...` | List and search customers by name or email |
+| `POST` | `/customers` | Create a customer (`email`, optional `name`) |
+| `GET` | `/customers/{id}` | Read one customer |
+| `PUT` | `/customers/{id}` | Update a customer |
+| `DELETE` | `/customers/{id}` | Delete a customer and its events |
+| `GET` | `/customers/{id}/events` | Read a customer's activity timeline |
+| `POST` | `/customers/{id}/events` | Add an activity (`event_type`, `data`) |
+| `GET` | `/events` | List all CRM events for dashboard statistics |
+| `POST` | `/api/crm/process` | Workflow callback used by the orchestrator |
+
+The CRM database defaults to `services/crm_service/crm.db`. Set `CRM_DATABASE_URL` to use another SQLite or SQLAlchemy-supported database URL.
+
+### Is CRM Truly Independent?
+
+**Yes, as a deployable service boundary:**
+
+- It has its own FastAPI process and port (`8002`).
+- It owns its own SQLAlchemy models, tables, and database file.
+- It serves its own frontend at `/static/crm/`.
+- It does not call inventory, notification, or orchestrator services.
+- The orchestrator calls CRM through `/api/crm/process`, which is the intended downstream-service relationship.
+- CRM can be stopped while the main workflow platform remains running.
+
+**No, not fully autonomous today:**
+
+- CRM login, registration, and token validation are provided by the main `app` at port `8000`.
+- CRM customer routes currently accept the forwarded JWT but do not independently validate it.
+- Docker Compose starts CRM as a separate container, but the CRM image is built from the repository root and shares the repository's Python requirements.
+
+Therefore, CRM is independently deployable and database-isolated, but authentication is still a shared platform dependency. To make it fully autonomous, move or duplicate the auth/token verification contract into `services/crm_service`, or place authentication behind a shared identity service that CRM can validate independently.
+
+### Failure Demonstration
+
+The CRM service includes demo controls:
+
+```bash
+curl -X POST http://localhost:8002/admin/simulate-failure
+curl http://localhost:8002/health
+curl -X POST http://localhost:8002/admin/recover
+```
+
+When CRM is unavailable, the CRM frontend shows an explicit `CRM service unavailable` state with a Retry action. The original workflow dashboard remains at `http://localhost:8000/static/index.html`.
+
+### Docker Compose
+
+Run the complete multi-service system with:
+
+```bash
+docker compose up --build
+```
+
+The CRM container is exposed at `http://localhost:8002/static/crm/`, and the orchestrator uses `CRM_SERVICE_URL=http://crm-service:8002` for workflow callbacks.
 
 ### Quick Start: Workflow Demo
 
