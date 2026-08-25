@@ -1,14 +1,34 @@
 document.addEventListener('DOMContentLoaded', () => {
+    setOrchestratorPage(window.location.hash === '#independent-services' ? 'services' : 'orchestrator');
+
     // Initial fetch of service status
     fetchServiceStatus();
 
     // Event listeners
     document.getElementById('refreshBtn').addEventListener('click', fetchServiceStatus);
     document.getElementById('orderForm').addEventListener('submit', handleOrderSubmit);
+    document.getElementById('servicesNavBtn').addEventListener('click', () => setOrchestratorPage('services'));
+    document.getElementById('backToOrchestrator').addEventListener('click', () => setOrchestratorPage('orchestrator'));
+    window.addEventListener('hashchange', () => setOrchestratorPage(window.location.hash === '#independent-services' ? 'services' : 'orchestrator'));
 
     // Auto-refresh service statuses every 5 seconds
     setInterval(fetchServiceStatus, 5000);
 });
+
+function setOrchestratorPage(page) {
+    const showServices = page === 'services';
+    const orchestratorPage = document.getElementById('orchestratorPage');
+    const servicesPage = document.getElementById('servicesPage');
+    if (!orchestratorPage || !servicesPage) return;
+    orchestratorPage.hidden = showServices;
+    servicesPage.hidden = !showServices;
+    const servicesNavButton = document.getElementById('servicesNavBtn');
+    if (servicesNavButton) servicesNavButton.hidden = showServices;
+    document.title = showServices ? 'Control Center | Cooklab Orchestrator' : 'Fault-Tolerant Workflow Orchestrator';
+    if (window.location.hash !== (showServices ? '#independent-services' : '')) {
+        history.replaceState(null, '', showServices ? '#independent-services' : window.location.pathname);
+    }
+}
 
 // Fetch & Update Service Statuses
 async function fetchServiceStatus() {

@@ -430,3 +430,24 @@ input:focus {
 #diagnosisActions { color: var(--text-secondary); margin: 6px 0 16px; padding-left: 20px; }
 #diagnosisActions li { margin-bottom: 5px; }
 @media (max-width: 700px) { .diagnosis-grid { grid-template-columns: 1fr; } }
+
+.page-intro { margin: 8px 0 24px; padding: 4px 2px; }
+.page-intro h2 { font-size: 1.65rem; margin: 6px 0 4px; }
+.page-intro p { color: var(--text-secondary); font-size: 0.9rem; }
+.section-kicker { color: var(--accent-blue); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+.services-intro { display: grid; grid-template-columns: auto 1fr; gap: 10px 18px; align-items: center; }
+.services-intro .section-kicker, .services-intro h2, .services-intro p { grid-column: 2; }
+.services-intro h2 { margin-top: -2px; }
+.services-intro p { margin-bottom: 0; }
+.service-panel { margin-top: 10px; }
+.service-link { text-decoration: none; }
+.header-actions { display: flex; gap: 10px; align-items: center; }
+.page-view[hidden] { display: none; }
+.workflow-trigger-card { grid-column: 1 / -1; width: min(100%, 620px); justify-self: center; }
+#servicesNavBtn[hidden] { display: none !important; }
+.service-controls { flex-wrap: wrap; }
+@media (max-width: 768px) {
+    .header-actions { flex-wrap: wrap; justify-content: flex-end; }
+    .services-intro { grid-template-columns: 1fr; }
+    .services-intro .section-kicker, .services-intro h2, .services-intro p { grid-column: 1; }
+}
